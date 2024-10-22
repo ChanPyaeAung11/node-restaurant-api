@@ -1,0 +1,33 @@
+{
+  "name": "intermediate-backend-development",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "cross-env npm run migrate && ts-node src/index.ts",
+    "debug": "node --inspect -r ts-node/register src/index.ts",
+    "test": "jest",
+    "generate": "drizzle-kit generate --config=src/data/drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config=src/data/drizzle.config.ts"
+  },
+  "dependencies": {
+    "debug": "~2.6.9",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.33.0",
+    "drizzle-zod": "^0.5.1",
+    "express": "~4.19.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.12.0",
+    "unleash-client": "^6.1.1",
+    "winston": "^3.14.2",
+    "zod-express-middleware": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.5.0",
+    "@types/pg": "^8.11.6",
+    "cross-env": "^7.0.3",
+    "drizzle-kit": "^0.24.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}

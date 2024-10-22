@@ -1,0 +1,121 @@
+name: redpanda-quickstart-one-broker
+networks:
+  redpanda_network:
+    driver: bridge
+volumes:
+  redpanda-0: null
+version: "3.8"
+services:
+  redpanda-0:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      # Address the broker advertises to clients that connect to the Kafka API.
+      # Use the internal addresses to connect to the Redpanda brokers'
+      # from inside the same Docker network.
+      # Use the external addresses to connect to the Redpanda brokers'
+      # from outside the Docker network.
+      - --advertise-kafka-addr internal://redpanda-0:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      # Address the broker advertises to clients that connect to the HTTP Proxy.
+      - --advertise-pandaproxy-addr internal://redpanda-0:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      # Redpanda brokers use the RPC API to communicate with each other internally.
+      - --rpc-addr redpanda-0:33145
+      - --advertise-rpc-addr redpanda-0:33145
+      # Mode dev-container uses well-known configuration properties for development in containers.
+      - --mode dev-container
+      # Tells Seastar (the framework Redpanda uses under the hood) to use 1 core on the system.
+      - --smp 1
+      - --default-log-level=info
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.2
+    container_name: redpanda-0
+    volumes:
+      - redpanda-0:/var/lib/redpanda/data
+    networks:
+      - redpanda_network
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+  console:
+    container_name: redpanda-console
+    image: docker.redpanda.com/redpandadata/console:v2.7.1
+    networks:
+      - redpanda_network
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda-0:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda-0:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-0:9644"]
+    ports:
+      - 8080:8080
+    depends_on:
+      - redpanda-0
+  postgres:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dummy_restaurant
+    ports:
+      - 5432:5432
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "--username=admin",
+          "--dbname=dummy_rest",
+          "--host=127.0.0.1",
+          "--port=5432",
+        ]
+      interval: 2s
+      timeout: 1m
+      retries: 5
+      start_period: 10s
+
+      # The Unleash server contains the Unleash configuration and
+  # communicates with server-side SDKs and the Unleash Proxy
+  web:
+    image: unleashorg/unleash-server:latest
+    ports:
+      - "4242:4242"
+    environment:
+      # This points Unleash to its backing database
+      DATABASE_URL: "postgres://admin:password@postgres/dummy_rest"
+      # Disable SSL for database connections.
+      DATABASE_SSL: "false"
+      # Changing log levels:
+      LOG_LEVEL: "warn"
+      # Proxy clients must use one of these keys to connect to the
+      # Proxy. To add more keys, separate them with a comma (`key1,key2`).
+      INIT_FRONTEND_API_TOKENS: "default:development.unleash-insecure-frontend-api-token"
+      # Initialize Unleash with a default set of client API tokens. To
+      # initialize Unleash with multiple tokens, separate them with a
+      # comma (`token1,token2`).
+      INIT_CLIENT_API_TOKENS: "default:development.unleash-insecure-api-token"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "index.js"]
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:4242/health || exit 1
+      interval: 1s
+      timeout: 1m
+      retries: 5
+      start_period: 15s
